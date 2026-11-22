@@ -1,0 +1,10 @@
+*.tmp
+*.bak
+*.log
+config.json
+appearance.json
+tests/*results*.txt
+tests/diagnostics.txt
+tests/*.exe
+.vs/
+obj/

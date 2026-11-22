@@ -149,53 +149,38 @@ namespace MonitorScaleTray {
         readonly Label status=new Label();
         bool loading,dirty;
         public bool ForceClose;
-        readonly Label summary=new Label();
-        readonly Label editState=new Label();
         readonly ToolTip tips=new ToolTip();
         public MainWindow(TrayContext context) {
             SuspendLayout(); AutoScaleDimensions=new SizeF(96,96);
             app=context; Text="屏幕缩放 · Monitor Scale"; Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             Font=Theme.Font(10); ForeColor=Theme.Ink; BackColor=Theme.Background; StartPosition=FormStartPosition.CenterScreen;
-            AutoScaleMode=AutoScaleMode.Dpi; ClientSize=new Size(1080,680); MinimumSize=new Size(930,580);
-            var layout=new TableLayoutPanel {Dock=DockStyle.Fill,Padding=new Padding(28,20,28,16),ColumnCount=1,RowCount=7};
+            AutoScaleMode=AutoScaleMode.Dpi; ClientSize=new Size(740,234); MinimumSize=new Size(640,210);
+            var layout=new TableLayoutPanel {Dock=DockStyle.Fill,Padding=new Padding(12,10,12,8),ColumnCount=1,RowCount=4};
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
-            foreach(int height in new[]{92,58,0,34,78,16,48}) layout.RowStyles.Add(new RowStyle(height==0?SizeType.Percent:SizeType.Absolute,height==0?100:height));
-
-            var header=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=2,RowCount=2,Margin=Padding.Empty};
-            header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,70)); header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,30));
-            header.RowStyles.Add(new RowStyle(SizeType.Absolute,48)); header.RowStyles.Add(new RowStyle(SizeType.Percent,100));
-            header.Controls.Add(new Label {Text="屏幕缩放",Font=Theme.Font(23,true),Dock=DockStyle.Fill,TextAlign=ContentAlignment.MiddleLeft,Margin=Padding.Empty},0,0);
-            header.Controls.Add(new Label {Text="为每块显示器保存合适的比例，连接时自动应用。",ForeColor=Theme.Muted,Dock=DockStyle.Fill,TextAlign=ContentAlignment.TopLeft,Padding=new Padding(0,5,0,0),Margin=Padding.Empty},0,1);
-            summary.Dock=DockStyle.Fill; summary.TextAlign=ContentAlignment.MiddleRight; summary.ForeColor=Theme.Blue; summary.Font=Theme.Font(10,true);
-            header.Controls.Add(summary,1,0);
-            editState.Dock=DockStyle.Fill; editState.TextAlign=ContentAlignment.TopRight; editState.ForeColor=Theme.Muted; editState.Padding=new Padding(0,5,0,0);
-            header.Controls.Add(editState,1,1); layout.Controls.Add(header,0,0);
-
+            foreach(int height in new[]{40,0,28,34}) layout.RowStyles.Add(new RowStyle(height==0?SizeType.Percent:SizeType.Absolute,height==0?100:height));
             var toolbar=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=2,RowCount=1,Margin=Padding.Empty};
             toolbar.RowStyles.Add(new RowStyle(SizeType.Percent,100));
-            toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100)); toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,144));
+            toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100)); toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,112));
             var actions=new FlowLayoutPanel {Dock=DockStyle.Fill,WrapContents=false,Margin=Padding.Empty};
-            AddButton(actions,"＋ 新建条目",delegate {grid.Rows.Add("","100","手动条目","—"); MarkDirty(); grid.CurrentCell=grid.Rows[grid.Rows.Count-1].Cells[0]; grid.BeginEdit(true);});
-            AddButton(actions,"刷新检测",RefreshDisplays);
-            AddButton(actions,"批量缩放",BatchScale);
-            AddButton(actions,"删除所选",DeleteSelected).Destructive=true;
-            AddButton(actions,"全选",delegate {grid.SelectAll();}).Width=64;
-            var appearance=MakeButton("",delegate {}); appearance.Width=142;
-            Action updateAppearance=delegate {appearance.Text="外观："+(Theme.Mode=="auto"?"自动":Theme.Mode=="dark"?"深色":"浅色")+" ▾";};
-            updateAppearance();
-            var themeMenu=Theme.Menu();
+            AddButton(actions,"新建",delegate {grid.Rows.Add("","100","手动条目","—"); MarkDirty(); grid.CurrentCell=grid.Rows[grid.Rows.Count-1].Cells[0]; grid.BeginEdit(true);});
+            AddButton(actions,"检测显示器",RefreshDisplays).Width=96;
+            AddButton(actions,"删除",DeleteSelected).Destructive=true;
+            var more=AddButton(actions,"更多 ▾",delegate {});
+            var menu=Theme.Menu();
+            menu.Items.Add("全选",null,delegate {grid.SelectAll();});
+            menu.Items.Add("批量缩放",null,delegate {try {BatchScale();} catch(Exception ex) {TrayContext.Error(ex);}});
+            menu.Items.Add("系统显示设置",null,delegate {try {Process.Start("ms-settings:display");} catch(Exception ex) {TrayContext.Error(ex);}});
+            menu.Items.Add(new ToolStripSeparator());
             foreach(string mode in new[]{"light","dark","auto"}) {
                 string choice=mode;
-                var item=new ToolStripMenuItem(mode=="auto"?"自动（跟随系统）":mode=="dark"?"深色":"浅色") {Tag=mode};
-                item.Click+=delegate {try {Theme.SetMode(choice); updateAppearance();} catch(Exception ex) {TrayContext.Error(ex);}};
-                themeMenu.Items.Add(item);
+                var item=new ToolStripMenuItem(mode=="auto"?"外观 · 跟随系统":mode=="dark"?"外观 · 深色":"外观 · 浅色") {Tag=mode};
+                item.Click+=delegate {try {Theme.SetMode(choice);} catch(Exception ex) {TrayContext.Error(ex);}}; menu.Items.Add(item);
             }
-            themeMenu.Opening+=delegate {foreach(ToolStripMenuItem item in themeMenu.Items) item.Checked=(string)item.Tag==Theme.Mode;};
-            appearance.Click+=delegate {themeMenu.Show(appearance,new Point(0,appearance.Height));};
-            appearance.Disposed+=delegate {themeMenu.Dispose();}; actions.Controls.Add(appearance);
+            menu.Opening+=delegate {foreach(ToolStripItem entry in menu.Items) {var item=entry as ToolStripMenuItem; if(item!=null && item.Tag!=null) item.Checked=(string)item.Tag==Theme.Mode;}};
+            more.Click+=delegate {menu.Show(more,new Point(0,more.Height));}; more.Disposed+=delegate {menu.Dispose();};
             toolbar.Controls.Add(actions,0,0);
-            var save=MakeButton("保存并应用",delegate {if(Save()) app.Apply(true); UpdateStatus();}); save.Primary=true; save.Width=144; save.Margin=Padding.Empty;
-            toolbar.Controls.Add(save,1,0); layout.Controls.Add(toolbar,0,1);
+            var save=MakeButton("保存并应用",delegate {if(Save()) app.Apply(true); UpdateStatus();}); save.Primary=true; save.Width=112; save.Margin=Padding.Empty;
+            toolbar.Controls.Add(save,1,0); layout.Controls.Add(toolbar,0,0);
 
             grid.Dock=DockStyle.Fill; grid.Margin=Padding.Empty; grid.BackgroundColor=Theme.Surface; grid.BorderStyle=BorderStyle.None;
             grid.AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill; grid.RowHeadersVisible=false;
@@ -208,37 +193,33 @@ namespace MonitorScaleTray {
             grid.ColumnHeadersDefaultCellStyle.Font=Theme.Font(9.5f,true); grid.ColumnHeadersDefaultCellStyle.SelectionBackColor=Theme.SurfaceVariant;
             grid.AlternatingRowsDefaultCellStyle.BackColor=Theme.Container;
             grid.Columns.Add(new DataGridViewTextBoxColumn {Name="Name",HeaderText="显示器名称",FillWeight=31});
-            grid.Columns.Add(new DataGridViewTextBoxColumn {Name="Scale",HeaderText="目标缩放 %",FillWeight=16});
+            grid.Columns.Add(new DataGridViewTextBoxColumn {Name="Scale",HeaderText="目标 % · 点击修改",FillWeight=25});
             grid.Columns.Add(new DataGridViewTextBoxColumn {Name="Connection",HeaderText="连接状态",ReadOnly=true,FillWeight=20});
-            grid.Columns.Add(new DataGridViewTextBoxColumn {Name="Current",HeaderText="当前比例 / 支持范围",ReadOnly=true,FillWeight=33});
+            grid.Columns.Add(new DataGridViewTextBoxColumn {Name="Current",HeaderText="当前",ReadOnly=true,FillWeight=24});
             grid.Columns[1].DefaultCellStyle.ForeColor=Theme.Blue; grid.Columns[1].DefaultCellStyle.Font=Theme.Font(10,true);
             grid.CellValueChanged+=delegate {if(!loading) MarkDirty();};
             grid.CurrentCellDirtyStateChanged+=delegate {if(grid.IsCurrentCellDirty) MarkDirty();};
             grid.DataBindingComplete+=delegate {UpdateGridMetrics();};
-            layout.Controls.Add(grid,0,2);
-            layout.Controls.Add(new Label {Text="双击名称或比例编辑   ·   Ctrl / Shift 多选   ·   关闭窗口后继续在托盘运行",Font=Theme.Font(9),ForeColor=Theme.Muted,Dock=DockStyle.Fill,TextAlign=ContentAlignment.MiddleLeft,Margin=Padding.Empty},0,3);
-
-            var notice=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=2,RowCount=1,BackColor=Theme.Container,Padding=new Padding(16,10,12,10),Margin=Padding.Empty};
-            notice.RowStyles.Add(new RowStyle(SizeType.Percent,100));
-            notice.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100)); notice.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,132));
-            status.Dock=DockStyle.Fill; status.TextAlign=ContentAlignment.MiddleLeft; status.AutoEllipsis=true; status.ForeColor=Theme.Muted; status.Font=Theme.Font(9); status.Margin=new Padding(0,0,16,0);
-            notice.Controls.Add(status,0,0);
-            var settings=MakeButton("系统显示设置",delegate {Process.Start("ms-settings:display");}); settings.Width=132; settings.Anchor=AnchorStyles.None; settings.Margin=Padding.Empty;
-            notice.Controls.Add(settings,1,0); layout.Controls.Add(notice,0,4);
-
+            layout.Controls.Add(grid,0,1);
+            tips.SetToolTip(grid,"双击名称或目标比例编辑；Ctrl / Shift 多选；悬停当前比例查看支持范围。");
+            grid.RowsAdded+=delegate {if(!loading) FitRows();}; grid.RowsRemoved+=delegate {if(!loading) FitRows();};
+            status.Dock=DockStyle.Fill; status.TextAlign=ContentAlignment.MiddleLeft; status.AutoEllipsis=true; status.ForeColor=Theme.Muted; status.Font=Theme.Font(9); status.Margin=Padding.Empty; status.Cursor=Cursors.Hand;
+            status.Click+=delegate {MessageBox.Show(this,app.Status,"运行状态",MessageBoxButtons.OK,MessageBoxIcon.Information);};
+            layout.Controls.Add(status,0,2);
             var configBar=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=3,RowCount=1,Margin=Padding.Empty};
             configBar.RowStyles.Add(new RowStyle(SizeType.Percent,100));
-            configBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,68)); configBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100)); configBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,132));
-            configBar.Controls.Add(new Label {Text="配置文件",Dock=DockStyle.Fill,TextAlign=ContentAlignment.MiddleLeft,Font=Theme.Font(9),ForeColor=Theme.Muted,Margin=Padding.Empty},0,0);
-            var pathLink=new LinkLabel {Text=Store.FilePath,Dock=DockStyle.Fill,AutoEllipsis=true,TextAlign=ContentAlignment.MiddleLeft,LinkColor=Theme.Muted,ActiveLinkColor=Theme.Blue,LinkBehavior=LinkBehavior.HoverUnderline,Font=Theme.Font(9),Margin=new Padding(0,0,16,0)};
+            configBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,40)); configBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100)); configBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,112));
+            configBar.Controls.Add(new Label {Text="配置",Dock=DockStyle.Fill,TextAlign=ContentAlignment.MiddleLeft,Font=Theme.Font(9),ForeColor=Theme.Muted,Margin=Padding.Empty},0,0);
+            var pathLink=new LinkLabel {Text=Store.FilePath,Dock=DockStyle.Fill,AutoEllipsis=true,TextAlign=ContentAlignment.MiddleLeft,LinkColor=Theme.Muted,ActiveLinkColor=Theme.Blue,LinkBehavior=LinkBehavior.HoverUnderline,Font=Theme.Font(9),Margin=new Padding(0,0,8,0)};
             pathLink.LinkClicked+=delegate {try {Process.Start("explorer.exe","/select,\""+Store.FilePath+"\"");} catch(Exception ex) {TrayContext.Error(ex);}};
             tips.SetToolTip(pathLink,Store.FilePath); configBar.Controls.Add(pathLink,1,0);
-            var folder=MakeButton("打开配置文件夹",delegate {Process.Start("explorer.exe",Store.Folder);}); folder.Width=132; folder.Anchor=AnchorStyles.Right; folder.Margin=Padding.Empty;
-            configBar.Controls.Add(folder,2,0); layout.Controls.Add(configBar,0,6);
+            var folder=MakeButton("打开文件夹",delegate {Process.Start("explorer.exe",Store.Folder);}); folder.Width=112; folder.Anchor=AnchorStyles.Right; folder.Margin=Padding.Empty;
+            configBar.Controls.Add(folder,2,0); layout.Controls.Add(configBar,0,3);
             Controls.Add(layout); LoadRows();
             HandleCreated+=delegate {Theme.PaintTitle(this);};
             FormClosing+=delegate(object s,FormClosingEventArgs e) {if(!ForceClose && e.CloseReason==CloseReason.UserClosing) {e.Cancel=true; if(ResolveDirty()) Hide();}};
             Shown+=delegate {
+                FitRows();
                 var area=Screen.FromControl(this).WorkingArea;
                 MinimumSize=new Size(Math.Min(MinimumSize.Width,area.Width-32),Math.Min(MinimumSize.Height,area.Height-32));
                 Size=new Size(Math.Min(Width,area.Width-32),Math.Min(Height,area.Height-32));
@@ -248,12 +229,21 @@ namespace MonitorScaleTray {
             };
             ResumeLayout(true);
         }
+        void FitRows() {
+            if(!IsHandleCreated) return;
+            UpdateGridMetrics();
+            using(var graphics=CreateGraphics()) {
+                int height=(int)((120+32+32*Math.Max(2,Math.Min(8,grid.Rows.Count)))*graphics.DpiX/96f);
+                int limit=Screen.FromControl(this).WorkingArea.Height-(Height-ClientSize.Height)-32;
+                ClientSize=new Size(ClientSize.Width,Math.Min(height,limit));
+            }
+        }
         void UpdateGridMetrics() {
             if(!IsHandleCreated) return;
             using(var graphics=CreateGraphics()) {
                 float scale=graphics.DpiX/96f;
-                grid.RowTemplate.Height=(int)(46*scale); grid.ColumnHeadersHeight=(int)(42*scale);
-                grid.DefaultCellStyle.Padding=new Padding((int)(12*scale),0,(int)(8*scale),0);
+                grid.RowTemplate.Height=(int)(32*scale); grid.ColumnHeadersHeight=(int)(32*scale);
+                grid.DefaultCellStyle.Padding=new Padding((int)(8*scale),0,(int)(6*scale),0);
                 grid.ColumnHeadersDefaultCellStyle.Padding=grid.DefaultCellStyle.Padding;
                 foreach(DataGridViewRow row in grid.Rows) row.Height=grid.RowTemplate.Height;
             }
@@ -264,18 +254,18 @@ namespace MonitorScaleTray {
         }
         protected override void Dispose(bool disposing) {if(disposing) tips.Dispose(); base.Dispose(disposing);}
         ThemeButton MakeButton(string text,Action click) {
-            var button=new ThemeButton {Text=text};
+            var button=new ThemeButton {Text=text,Width=64,Height=30,Margin=new Padding(0,0,6,0)};
             button.Click+=delegate {try {click();} catch(Exception ex) {TrayContext.Error(ex);}}; return button;
         }
         ThemeButton AddButton(FlowLayoutPanel bar,string text,Action click) {var button=MakeButton(text,click); bar.Controls.Add(button); return button;}
-        void MarkDirty() {dirty=true; Text="屏幕缩放 · Monitor Scale * 未保存"; editState.Text="有未保存的修改"; editState.ForeColor=Theme.Blue;}
+        void MarkDirty() {dirty=true; Text="屏幕缩放 · Monitor Scale * 未保存";}
         void LoadRows() {
             loading=true; grid.Rows.Clear();
             foreach(var p in app.Config.displays) {
                 int i=grid.Rows.Add(p.Key,p.Value.ToString(),"","—");
                 grid.Rows[i].Tag=app.Config.devicePaths.ContainsKey(p.Key)?app.Config.devicePaths[p.Key]:null;
             }
-            loading=false; dirty=false; Text="屏幕缩放 · Monitor Scale"; editState.Text="配置已保存"; editState.ForeColor=Theme.Muted; UpdateStatus(); UpdateGridMetrics();
+            loading=false; dirty=false; Text="屏幕缩放 · Monitor Scale"; UpdateStatus(); UpdateGridMetrics();
         }
         public void UpdateStatus() {
             loading=true;
@@ -284,10 +274,10 @@ namespace MonitorScaleTray {
                 var matches=app.Monitors.Where(item=>path!=null ? String.Equals(path,item.DevicePath,StringComparison.OrdinalIgnoreCase) : String.Equals(key,item.Name,StringComparison.OrdinalIgnoreCase)).ToList();
                 var m=matches.Count==1?matches[0]:null;
                 row.Cells[2].Value=matches.Count>1?"同名歧义，请检测绑定":m==null?"未连接 / 未匹配":"已连接";
-                row.Cells[3].Value=m==null?"—":m.Error!=null?(m.Current>0?m.Current+"% / 自定义缩放":"读取失败"):m.Current+"% / "+String.Join(", ",m.Supported);
-                row.Cells[3].ToolTipText=m==null?"":m.Error??String.Join(", ",m.Supported);
+                row.Cells[3].Value=m==null?"—":m.Error!=null?(m.Current>0?m.Current+"% / 自定义缩放":"读取失败"):m.Current+"%";
+                row.Cells[3].ToolTipText=m==null?"":m.Error??("支持："+String.Join(", ",m.Supported)+"%");
             }
-            loading=false; status.Text=app.Status; tips.SetToolTip(status,app.Status); summary.Text=app.Monitors.Count+" 台在线  ·  "+grid.Rows.Count+" 项配置";
+            loading=false; status.Text=app.Status; tips.SetToolTip(status,app.Status+"\n点击查看完整状态。");
         }
         bool Save() {
             try {
@@ -315,13 +305,12 @@ namespace MonitorScaleTray {
         }
         void BatchScale() {
             if(grid.SelectedRows.Count==0) return;
-            using(var dialog=Theme.Dialog("批量设置缩放",new Size(400,210))) {
-                dialog.Controls.Add(new Label {Text="为选中的 "+grid.SelectedRows.Count+" 项配置设置比例",Left=24,Top=22,Width=350,Height=30,Font=Theme.Font(11,true)});
-                var values=new ComboBox {Left=24,Top=67,Width=352,DropDownStyle=ComboBoxStyle.DropDownList,FlatStyle=FlatStyle.Flat,BackColor=Theme.SurfaceVariant,ForeColor=Theme.Ink};
+            using(var dialog=Theme.Dialog("批量设置缩放",new Size(340,160))) {
+                dialog.Controls.Add(new Label {Text="为选中的 "+grid.SelectedRows.Count+" 项配置设置比例",Left=16,Top=12,Width=308,Height=24,Font=Theme.Font(10)});
+                var values=new ComboBox {Left=16,Top=46,Width=308,DropDownStyle=ComboBoxStyle.DropDownList,FlatStyle=FlatStyle.Flat,BackColor=Theme.SurfaceVariant,ForeColor=Theme.Ink};
                 values.Items.AddRange(Native.Scales.Select(x=>(object)(x+"%")).ToArray()); values.SelectedIndex=0;
-                var ok=new ThemeButton {Text="设置所选条目",Left=232,Top=144,Width=144,Primary=true,DialogResult=DialogResult.OK};
-                var cancel=new ThemeButton {Text="取消",Left=120,Top=144,Width=100,DialogResult=DialogResult.Cancel};
-                dialog.Controls.Add(new Label {Text="返回主窗口后，点击“保存并应用”生效。",Left=24,Top=108,Width=350,Height=24,ForeColor=Theme.Muted,Font=Theme.Font(9)});
+                var ok=new ThemeButton {Text="设置所选条目",Left=204,Top=108,Width=120,Height=32,Primary=true,DialogResult=DialogResult.OK};
+                var cancel=new ThemeButton {Text="取消",Left=92,Top=108,Width=100,Height=32,DialogResult=DialogResult.Cancel};
                 dialog.Controls.Add(values); dialog.Controls.Add(ok); dialog.Controls.Add(cancel); dialog.AcceptButton=ok; dialog.CancelButton=cancel; dialog.ResumeLayout(true);
                 if(dialog.ShowDialog(this)==DialogResult.OK) {foreach(DataGridViewRow row in grid.SelectedRows) row.Cells[1].Value=Native.Scales[values.SelectedIndex].ToString(); MarkDirty();}
             }
@@ -331,15 +320,14 @@ namespace MonitorScaleTray {
             var paths=new HashSet<string>(grid.Rows.Cast<DataGridViewRow>().Where(r=>r.Tag!=null).Select(r=>(string)r.Tag),StringComparer.OrdinalIgnoreCase);
             var fresh=app.Monitors.Where(m=>!paths.Contains(m.DevicePath)).ToList();
             if(fresh.Count==0) {MessageBox.Show(this,"当前工作的显示器均已添加。","刷新检测"); return;}
-            using(var dialog=Theme.Dialog("添加检测到的显示器",new Size(700,380))) {
-                var content=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=3,Padding=new Padding(24)};
-                content.RowStyles.Add(new RowStyle(SizeType.Absolute,48)); content.RowStyles.Add(new RowStyle(SizeType.Percent,100)); content.RowStyles.Add(new RowStyle(SizeType.Absolute,60));
-                content.Controls.Add(new Label {Text="选择要添加或绑定的显示器",Dock=DockStyle.Fill,Font=Theme.Font(12,true)},0,0);
+            using(var dialog=Theme.Dialog("添加检测到的显示器",new Size(580,80+28*Math.Max(2,Math.Min(6,fresh.Count))))) {
+                var content=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=2,Padding=new Padding(16)};
+                content.RowStyles.Add(new RowStyle(SizeType.Percent,100)); content.RowStyles.Add(new RowStyle(SizeType.Absolute,44));
                 var list=new CheckedListBox {Dock=DockStyle.Fill,CheckOnClick=true,HorizontalScrollbar=true,BorderStyle=BorderStyle.None,BackColor=Theme.Surface,ForeColor=Theme.Ink};
                 foreach(var m in fresh) list.Items.Add(m.Name+"  ·  当前 "+(m.Current==0?"未知":m.Current+"%")+"  ·  "+m.DevicePath,true);
-                var bottom=new FlowLayoutPanel {Dock=DockStyle.Fill,FlowDirection=FlowDirection.RightToLeft,Padding=new Padding(0,18,0,0),Margin=Padding.Empty};
-                var ok=new ThemeButton {Text="添加所选",Primary=true,DialogResult=DialogResult.OK,Margin=Padding.Empty}; var cancel=new ThemeButton {Text="取消",DialogResult=DialogResult.Cancel};
-                bottom.Controls.Add(ok); bottom.Controls.Add(cancel); content.Controls.Add(list,0,1); content.Controls.Add(bottom,0,2); dialog.Controls.Add(content); dialog.AcceptButton=ok; dialog.CancelButton=cancel; dialog.ResumeLayout(true);
+                var bottom=new FlowLayoutPanel {Dock=DockStyle.Fill,FlowDirection=FlowDirection.RightToLeft,Padding=new Padding(0,10,0,0),Margin=Padding.Empty};
+                var ok=new ThemeButton {Text="添加所选",Height=32,Primary=true,DialogResult=DialogResult.OK,Margin=Padding.Empty}; var cancel=new ThemeButton {Text="取消",Height=32,DialogResult=DialogResult.Cancel};
+                bottom.Controls.Add(ok); bottom.Controls.Add(cancel); content.Controls.Add(list,0,0); content.Controls.Add(bottom,0,1); dialog.Controls.Add(content); dialog.AcceptButton=ok; dialog.CancelButton=cancel; dialog.ResumeLayout(true);
                 if(dialog.ShowDialog(this)!=DialogResult.OK) return;
                 foreach(int index in list.CheckedIndices) {
                     var m=fresh[index];
